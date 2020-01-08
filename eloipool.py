@@ -450,10 +450,16 @@ def checkData(share, wld):
 	if data[0:4] != MT.MP['_BlockVersionBytes']:
 		raise RejectedShare('bad-version')
 
-def buildStratumData(share, merkleroot, versionbytes):
+def buildStratumData(share, merkleroot):
+	if share["block_version"] != "":
+		data = a2b_hex(share["block_version"])[::-1]
+	else:
+		data = config.BlockVersion
+
+
 	(prevBlock, height, bits) = MM.currentBlock
 	
-	data = versionbytes
+
 	data += prevBlock
 	data += merkleroot
 	data += share['ntime'][::-1]
@@ -489,7 +495,11 @@ def checkShare(share):
 	if 'data' in share:
 		# getwork/GBT
 		data = share['data']
-		
+
+		if username not in workLog:
+			raise RejectedShare('unknown-user')
+		MWL = workLog[username]
+
 		shareMerkleRoot = data[36:68]
 		if 'blkdata' in share:
 			pl = share['blkdata']
@@ -508,17 +518,27 @@ def checkShare(share):
 			moden = 0
 			coinbase = None
 		
-		(wld, issueT) = LookupWork(username, wli)
+		#(wld, issueT) = LookupWork(username, wli)
+		(wld, issueT) = MWL[wli]
 		checkData(share, wld)
 	else:
 		# Stratum
 		checkQuickDiffAdjustment = config.DynamicTargetQuick
 		wli = share['jobid']
-		(wld, issueT) = LookupWork(None, wli)
+		buildStratumData(share, b'\0' * 32)
+		#(wld, issueT) = LookupWork(None, wli)
 		mode = 'MC'
 		moden = 1
 		othertxndata = b''
-	
+		if None not in workLog:
+			# We haven't yet sent any stratum work for this block
+			raise RejectedShare('unknown-work')
+		MWL = workLog[None]
+
+	if wli not in MWL:
+		raise RejectedShare('unknown-work')
+
+	(wld, issueT) = MWL[wli]
 	share[mode] = wld
 	
 	share['issuetime'] = issueT
@@ -530,7 +550,9 @@ def checkShare(share):
 		coinbase = workCoinbase + share['extranonce1'] + share['extranonce2']
 		cbtxn.setCoinbase(coinbase)
 		cbtxn.assemble()
-		data = buildStratumData(share, workMerkleTree.withFirst(cbtxn), workMerkleTree.MP['_BlockVersionBytes'])
+
+
+		data = buildStratumData(share, workMerkleTree.withFirst(cbtxn))
 		shareMerkleRoot = data[36:68]
 	
 	if data in DupeShareHACK:
@@ -683,7 +705,7 @@ def receiveShare(share):
 	finally:
 		if 'data' not in share:
 			# In case of rejection, data might not have been defined yet, but logging may need it
-			buildStratumData(share, b'\0' * 32, b'\xff\xff\xff\xff')
+			buildStratumData(share, b'\0' * 32)
 		if not share.get('upstreamRejectReason', None) is PendingUpstream:
 			logShare(share)
 

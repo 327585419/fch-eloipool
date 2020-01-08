@@ -37,7 +37,7 @@ import util
 _makeCoinbase = [0, 0]
 _filecounter = 0
 
-SupportedRules = ('csv', 'segwit')
+SupportedRules = ()
 
 def SplitRuleFlag(ruleflag):
 	MandatoryRule = (ruleflag[0] == '!')
@@ -410,6 +410,12 @@ class merkleMaker(threading.Thread):
 			return None
 		
 		ISupportAllRules = True
+		if not "rules" in MP:
+			MP["rules"] = []
+		if not 'vbavailable' in MP:
+			MP['vbavailable'] = []
+
+
 		for ruleflag in MP['rules']:
 			(MandatoryRule, rule) = SplitRuleFlag(ruleflag)
 			if rule not in SupportedRules:

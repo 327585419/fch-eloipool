@@ -26,6 +26,8 @@ import struct
 from time import time
 import traceback
 from util import RejectedShare, swap32, target2bdiff, UniqueSessionIdManager
+import config
+
 
 extranonce2sz = 4
 
@@ -57,7 +59,9 @@ class StratumHandler(networkserver.SocketHandler):
 		self.JobTargets = collections.OrderedDict()
 		self.UA = None
 		self.LicenseSent = agplcompliance._SourceFiles is None
-	
+
+		self.Asicboost = False
+
 	def sendReply(self, ob):
 		return self.push(json.dumps(ob).encode('ascii') + b"\n")
 	
@@ -198,10 +202,26 @@ class StratumHandler(networkserver.SocketHandler):
 		except:
 			pass
 		super().close()
-	
-	def _stratum_mining_submit(self, username, jobid, extranonce2, ntime, nonce):
+
+	def porcess_version(self, version):
+		version_num = int(version, 16)
+		mask = config.MultiVersionOptions["version_rolling_mask"] & self.version_rolling_mask
+		if (version_num & ~mask) != 0:
+			return ""
+		version_int = (0x20000000 & ~mask) | (version_num & mask)
+		version = '%x' % (version_int)
+		return version
+
+	def _stratum_mining_submit(self, username, jobid, extranonce2, ntime, nonce,*extend_config):
 		if username not in self.Usernames:
 			raise StratumError(24, 'unauthorized-user', False)
+		if len(extend_config) == 0:
+			version = ""
+		else:
+			version = extend_config[0]
+			if self.Asicboost:
+				version = self.porcess_version(version)
+
 		share = {
 			'username': username,
 			'remoteHost': self.remoteHost,
@@ -212,6 +232,7 @@ class StratumHandler(networkserver.SocketHandler):
 			'nonce': bytes.fromhex(nonce),
 			'userAgent': self.UA,
 			'submitProtocol': 'stratum',
+			"block_version":version,
 		}
 		if jobid in self.JobTargets:
 			share['target'] = self.JobTargets[jobid]
@@ -248,6 +269,42 @@ class StratumHandler(networkserver.SocketHandler):
 			s = list(s)
 			s[1] = s[1].decode('latin-1')
 		return s
+
+
+	def _stratum_mining_configure(self, extensions, parameters):
+
+		if not config.MultiVersionOptions["enable"]:
+			self.sendReply({
+				'error': [-3, "doesn't support this protocol", None],
+				'id': None,
+				'result': None,
+			})
+			return
+
+		ret_msg = {}
+		for extension in extensions:
+			if extension == 'version-rolling':
+				self.version_rolling_mask = int(parameters['version-rolling.mask'], 16)
+				version_rolling_min_bit_count = int(parameters.get('version-rolling.min-bit-count', 2))
+				new_mask = config.MultiVersionOptions["version_rolling_mask"] & self.version_rolling_mask
+				if bin(new_mask).count("1") >= version_rolling_min_bit_count:
+					ret_msg["version-rolling"] = True
+					ret_msg['version-rolling.mask'] = '%x' % (new_mask)
+
+					self.Asicboost = True
+				else:
+					raise StratumError(-1,'No-enough-bits')
+		return ret_msg
+
+	def _stratum_mining_multi_version(self, count):
+		if config.MultiVersionOptions['enable']:
+			self.sendReply({
+				'id': None,
+				'method': 'mining.multi_version',
+				'params': config.MultiVersionOptions['versions'],
+			})
+		return None
+
 
 class StratumServer(networkserver.AsyncSocketServer):
 	logger = logging.getLogger('StratumServer')
