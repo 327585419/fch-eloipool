@@ -36,7 +36,7 @@ if not hasattr(config, 'ShareTarget'):
 	config.ShareTarget = 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
 if not hasattr(config, 'WorkUpdateInterval'):
-	config.WorkUpdateInterval = 55
+	config.WorkUpdateInterval = 12
 config.StaleWorkTimeout = max(120, config.WorkUpdateInterval * 2)
 util.UniqueSessionIdManager._defaultDelay = config.StaleWorkTimeout
 
@@ -98,7 +98,7 @@ except:
 from bitcoin.script import BitcoinScript, WitnessMagic
 from bitcoin.txn import Txn
 from base58 import b58decode
-from binascii import b2a_hex
+from binascii import b2a_hex,a2b_hex
 from struct import pack
 import subprocess
 from time import time
@@ -108,32 +108,13 @@ def makeCoinbaseTxn(coinbaseValue, useCoinbaser = True, prevBlockHex = None, wit
 		raise NotImplementedError
 	
 	txn = Txn.new()
-	
-	if useCoinbaser and hasattr(config, 'CoinbaserCmd') and config.CoinbaserCmd:
-		coinbased = 0
-		try:
-			cmd = config.CoinbaserCmd
-			cmd = cmd.replace('%d', str(coinbaseValue))
-			cmd = cmd.replace('%p', prevBlockHex or '""')
-			p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-			nout = int(p.stdout.readline())
-			for i in range(nout):
-				amount = int(p.stdout.readline())
-				addr = p.stdout.readline().rstrip(b'\n').decode('utf8')
-				pkScript = BitcoinScript.toAddress(addr)
-				txn.addOutput(amount, pkScript)
-				coinbased += amount
-		except:
-			coinbased = coinbaseValue + 1
-		if coinbased >= coinbaseValue:
-			logging.getLogger('makeCoinbaseTxn').error('Coinbaser failed!')
-			txn.outputs = []
-		else:
-			coinbaseValue -= coinbased
-	
+	#todo needs get dev rewared from MP
+
 	pkScript = BitcoinScript.toAddress(config.TrackerAddr)
-	txn.addOutput(coinbaseValue, pkScript)
-	
+	txn.addOutput(coinbaseValue-config.devreward_value, pkScript)
+	txn.addOutput(config.devreward_value,a2b_hex(config.devreward_pubkey))
+
+
 	# SegWit commitment
 	if not witness_commitment is None:
 		txn.addOutput(0, BitcoinScript.commitment(WitnessMagic + witness_commitment))
