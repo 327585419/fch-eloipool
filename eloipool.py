@@ -114,7 +114,7 @@ def makeCoinbaseTxn(coinbaseValue, useCoinbaser = True, prevBlockHex = None, wit
 
 	devfeeScript = BitcoinScript.toAddress(config.Coinbaser_fee)
 
-	txn.addOutput(coinbaseValue - config.devreward_value- config.Coinbaser_value, pkScript)
+	txn.addOutput(coinbaseValue - config.Coinbaser_value, pkScript)
 	txn.addOutput( config.Coinbaser_value, devfeeScript)
 	txn.addOutput(config.devreward_value,a2b_hex(config.devreward_pubkey))
 

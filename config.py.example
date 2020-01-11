@@ -81,6 +81,7 @@ TrackerAddr = '1GTnq6tgf64kKsgvutz8pTuLNCKXXCzXDK'
 
 Coinbaser_fee = '1GTnq6tgf64kKsgvutz8pTuLNCKXXCzXDK'
 Coinbaser_value = 25000000
+
 devreward_value = 2500000000
 devreward_pubkey = "76a914f1704a9663c1e530f82ca1bc7ff52f0f65abc1ca88ac"
 
